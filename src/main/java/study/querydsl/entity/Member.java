@@ -43,7 +43,9 @@ public class Member {
         if(this.team != null){
             this.team.getMembers().remove(this);
         }
-        this.team = team;
-        this.team.getMembers().add(this);
+        if(team != null){
+            this.team = team;
+            this.team.getMembers().add(this);
+        }
     }
 }
