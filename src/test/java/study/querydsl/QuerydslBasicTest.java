@@ -427,7 +427,7 @@ public class QuerydslBasicTest {
     }
     
     @Test
-    public void selectSubQueru() throws Exception{
+    public void selectSubQuery() throws Exception{
         //given
         QMember memberSub = new QMember("memberSub");
         //when
