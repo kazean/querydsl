@@ -1,19 +1,21 @@
 package study.querydsl;
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
-import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import study.querydsl.dto.MemberDto;
+import study.querydsl.dto.QMemberDto;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
-import study.querydsl.entity.QTeam;
 import study.querydsl.entity.Team;
 
 import javax.persistence.EntityManager;
@@ -25,6 +27,7 @@ import java.util.List;
 
 import static com.querydsl.jpa.JPAExpressions.*;
 import static org.assertj.core.api.Assertions.*;
+import static org.springframework.util.StringUtils.*;
 import static study.querydsl.entity.QMember.*;
 import static study.querydsl.entity.QTeam.*;
 
@@ -33,7 +36,6 @@ import static study.querydsl.entity.QTeam.*;
 public class QuerydslBasicTest {
     @PersistenceContext
     EntityManager em;
-
 //    JPQQueryFactory를 필드로 multi Thread connection 자동해결
     JPAQueryFactory queryFactory;
 
@@ -502,5 +504,194 @@ public class QuerydslBasicTest {
             System.out.println("conact = " + conact);
         }
     }
+
+    /**
+     * JPA Projections dto
+     */
+    @Test
+    public void jpaDto(){
+        List<MemberDto> results = em.createQuery("select new study.querydsl.dto.MemberDto(m.username, m.age) from Member m", MemberDto.class)
+                .getResultList();
+
+        for (MemberDto memberDto : results) {
+            System.out.println("memberDto = " + memberDto);
+        }
+        assertThat(results).extracting("username").containsExactly("member1","member2","member3","member4");
+    }
+
+    /**
+     * querydsl projections
+     * bean, fields, constructor, @QueryProjection
+     * -bean : 프로퍼티접근 > 런타임오류, 별칭
+     * -fields : 필드직접접근 > 런타임오류, 별칭
+     * -constructor : 생성자 접근  > 컴파일오류
+     * -생성자 + @QueryProjection new QEntity(Expression ...)
+     *  > 컴파일오류
+     *  > querydsl 의존
+     *  
+     */
+    @Test
+    public void querydslDto_bean(){
+        List<MemberDto> results = queryFactory.select(Projections.bean(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+        for (MemberDto memberDto : results) {
+            System.out.println("memberDto = " + memberDto);
+        }
+        assertThat(results).extracting("username").containsExactly("member1","member2","member3","member4");
+    }
+
+    @Test
+    public void querydslDto_fields(){
+        List<MemberDto> results = queryFactory.select(Projections.fields(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+        for (MemberDto memberDto : results) {
+            System.out.println("memberDto = " + memberDto);
+        }
+        assertThat(results).extracting("username").containsExactly("member1","member2","member3","member4");
+    }
+
+    @Test
+    public void querydslDto_constructors(){
+        List<MemberDto> results = queryFactory.select(Projections.constructor(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+        for (MemberDto memberDto : results) {
+            System.out.println("memberDto = " + memberDto);
+        }
+        assertThat(results).extracting("username").containsExactly("member1","member2","member3","member4");
+    }
+
+    @Test
+    public void querydsl_QueryProjection() throws Exception{
+        //given
+        //when
+        List<MemberDto> results = queryFactory.select(new QMemberDto(member.username, member.age))
+                .from(member)
+                .fetch();
+        //then
+        for (MemberDto memberDto : results) {
+            System.out.println("memberDto = " + memberDto);
+        }
+        assertThat(results).extracting("username").containsExactly("member1","member2","member3","member4");
+    }
+
+    /**
+     * 동적쿼리
+     * BooleanBuilder, where 
+     */
+    @Test
+    public void dynamicQuery_booleanBuilder() throws Exception{
+        //given
+        String usernameParam = "member1";
+        Integer ageParam = 10;
+
+        //when
+        List<Member> results = search_booleanbuilder(usernameParam, ageParam);
+
+        //then
+        assertThat(results).extracting("username").containsExactly("member1");
+        assertThat(results).extracting("age").containsExactly(10);
+    }
+
+    private List<Member> search_booleanbuilder(String usernameCond, Integer ageCond){
+        BooleanBuilder booleanBuilder = new BooleanBuilder();
+        if(hasText(usernameCond)){
+            booleanBuilder.and(member.username.eq(usernameCond));
+        }
+        if(ageCond != null){
+            booleanBuilder.and(member.age.eq(ageCond));
+        }
+        return queryFactory.select(member)
+                .from(member)
+                .where(booleanBuilder)
+                .fetch();
+    }
+    
+    @Test
+    public void dynamic_Query_whereParam() throws Exception{
+        //given
+        String usernameParam = "member1";
+//        Integer ageParam = 10;
+        Integer ageParam = null;
+
+        //when
+        List<Member> results = search_whereParam(usernameParam, ageParam);
+
+        //then
+        assertThat(results).extracting("username").containsExactly("member1");
+        assertThat(results).extracting("age").containsExactly(10);
+    }
+
+    private List<Member> search_whereParam(String usernameCond, Integer ageCond) {
+        return queryFactory.selectFrom(member)
+                .where(usernameEq(usernameCond), ageEq(ageCond))
+                .fetch();
+    }
+
+    private BooleanExpression usernameEq(String usernameCond) {
+        return usernameCond != null ? member.username.eq(usernameCond) : null;
+    }
+
+    private BooleanExpression ageEq(Integer ageCond) {
+        return ageCond != null ? member.age.eq(ageCond) : null;
+    }
+
+
+    /**
+     * 수정,삭제 벌크연산
+     * update set where
+     *
+     * Expression.add(-1), multiply ...
+     * > 영속성 컨텍스트와 db와 안맞으니 주의
+     */
+    @Test
+    public void bulk_update_delete() throws Exception{
+        long updateCount1 = queryFactory.update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(28))
+                .execute();
+
+        long updateCount2 = queryFactory.update(member)
+                .set(member.age, member.age.add(1))
+                .execute();
+        queryFactory.delete(member)
+                .where(member.age.gt(18))
+                .execute();
+    }
+
+    /**
+     * SQL function 사용
+     * 
+     * Expression.stringTemplate(String template, Object ... args)
+     * 사용자정의는 Dialect 등록하여 사용
+     * ex)
+     * package org.hibernate.dialect.H2Dialect extends Dialect;
+     * registerFunction( "replace", new StandardSQLFunction( "replace", StandardBasicTypes.STRING ) );
+     */
+    @Test
+    public void useDBFunction() throws Exception{
+        //given
+        //when
+        List<String> replaceResults = queryFactory.select(Expressions.stringTemplate("function('replace',{0},{1},{2})", member.username, "member", "m"))
+                .from(member)
+                .fetch();
+        List<String> lowerResults = queryFactory
+                .select(member.username)
+                .from(member)
+                .where(member.username.eq(member.username.lower()))
+                .fetch();
+        //then
+        for (String replace : replaceResults) {
+            System.out.println("username = " + replace);
+        }
+
+        for (String lower : lowerResults) {
+            System.out.println("lower = " + lower);
+        }
+
+    }
+
 
 }
