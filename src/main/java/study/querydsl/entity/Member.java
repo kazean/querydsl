@@ -48,4 +48,5 @@ public class Member {
             this.team.getMembers().add(this);
         }
     }
+
 }

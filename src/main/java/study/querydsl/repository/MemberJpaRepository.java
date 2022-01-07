@@ -86,7 +86,7 @@ public class MemberJpaRepository {
                 .fetch();
     }
 
-    public List<MemberTeamDto> searchByWhereparam(MemberSearchCondition condition){
+    public List<MemberTeamDto> search(MemberSearchCondition condition){
         return queryFactory
                 .select(new QMemberTeamDto(member.id,member.username,member.age,team.id,team.name))
                 .from(member)
